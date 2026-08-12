@@ -6,3 +6,4 @@ __pycache__/
 conversation_log.json
 *.zip
 bot.log
+terraform.tfvars

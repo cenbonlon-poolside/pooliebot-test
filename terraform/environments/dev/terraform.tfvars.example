@@ -1,0 +1,4 @@
+aws_region = "us-east-1"
+poolside_api_key = "your_poolside_api_key_here"
+discord_public_key = "your_discord_public_key_here"
+discord_app_id = "1537050271606382592"

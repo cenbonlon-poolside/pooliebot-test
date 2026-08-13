@@ -13,10 +13,13 @@ Poolie is a Poolside community Discord bot that answers questions about Poolside
 ```
 bot.py
 ├── Discord Client (discord.py)
-├── Poolside API Client (OpenAI-compatible)
+├── Poolside API Client (AsyncOpenAI)
 ├── Rate Limiter (in-memory dict, 10s cooldown)
 ├── Channel Guard (ALLOWED_CHANNELS allowlist)
+├── Conversation History (per-channel, rolling buffer)
 ├── SVG Converter (cairosvg)
+├── Tool Detection (keyword matching)
+├── Feedback Tracker (reaction-based)
 └── SYSTEM Prompt (Poolside knowledge base)
 ```
 
@@ -29,17 +32,21 @@ Discord Gateway → on_message()
     ↓
 [Filters: self-message, non-mention, rate limit, channel check]
     ↓
-Extract prompt (remove @ mention)
+Tool detection (Kilo Code, Cline, etc.) → inject setup instructions
+    ↓
+Add to conversation history
     ↓
 Poolside Inference API (https://inference.poolside.ai/v1)
     ↓
-Response with SYSTEM prompt + user question
+Response with SYSTEM prompt + history
     ↓
 [SVG detection → convert to PNG image]
     ↓
+[Laguna mention → rich embed response]
+    ↓
 Chunk response (1900 char segments)
     ↓
-Discord reply
+Discord reply + update history
 ```
 
 ---
@@ -67,11 +74,14 @@ Discord reply
 - **Kilo Gateway** (`kilo.ai/models/by/poolside`) - Free models
 - **Self-managed** - VPC/on-prem deployment
 
-### 4. Tool Integrations
+### 4. Tool Integrations (Auto-detected)
 
-- **Editors**: Poolside Assistant (ACP), Cline, Kilo Code, JetBrains, Zed, Neovim
-- **Kilo Code setup**: Custom provider with Poolside endpoint
-- **OpenRouter**: Compatible with multiple tools
+When users mention specific tools, Poolie automatically provides setup instructions:
+- **Kilo Code** - Custom provider configuration
+- **Cline** - OpenAI-compatible endpoint setup
+- **JetBrains** - `pool acp` integration
+- **Zed** - External agent configuration
+- **Copilot** - OpenRouter access
 
 ### 5. pool CLI Documentation
 
@@ -79,12 +89,28 @@ Discord reply
 - `pool exec` - Automated/CI-CD workflows  
 - `pool acp` - Editor integration (ACP protocol)
 
-### 6. SVG to Image Conversion
+### 6. Slash Commands
+
+- `/ask <question>` - Ask Poolie a question (uses embeds)
+- `/feedback` - Submit feedback for training data
+
+### 7. SVG to Image Conversion
 
 When the model returns SVG code:
 - Automatically detects `<svg>...</svg>` tags
 - Converts to PNG using cairosvg library
 - Sends as image attachment instead of code block
+
+### 8. Rich Embeds
+
+When responses mention "Laguna", Poolie sends a formatted embed with:
+- Model links
+- Documentation links
+- Clean presentation
+
+### 9. Feedback Collection
+
+Users can react with 👍 or 👎 to bot messages, which are logged to `feedback_log.json` for training analysis.
 
 ---
 
@@ -102,6 +128,7 @@ POOLSIDE_API_KEY=sky_aUj0YNW3.lxSZMz4n8KAuCthKHNWd6duvieaIAmsi  # Poolside API k
 ```python
 ALLOWED_CHANNELS = {1537076245278359582}  # Staff channel only
 COOLDOWN = 10  # Seconds between requests per user
+HISTORY_MAX = 10  # Conversation history buffer
 ```
 
 ---
@@ -120,7 +147,6 @@ python bot.py
 ### EC2 Deployment
 
 ```bash
-# On EC2
 sudo yum install -y cairo-devel  # For SVG conversion
 python3 -m venv venv
 source venv/bin/activate
@@ -142,7 +168,7 @@ nohup python3 bot.py > bot.log 2>&1 &
 
 ### EC2 (Current)
 - ✅ Persistent WebSocket connection
-- ✅ Full feature support (mentions, SVG conversion)
+- ✅ Full feature support (mentions, SVG conversion, slash commands)
 - ✅ Always online
 - Instance: `t3.micro` in `eu-west-3`
 
@@ -157,15 +183,25 @@ nohup python3 bot.py > bot.log 2>&1 &
 ## Security Notes
 
 - `.env` contains secrets - never commit to version control
-- `.gitignore` excludes `.env`, `.venv/`, `__pycache__/`
+- `.gitignore` excludes `.env`, `.venv/`, `venv/`, `__pycache__/`, `feedback_log.json`
 - Bot only responds in allowed channels
 - Per-user rate limiting prevents spam
 
 ---
 
-## Future Enhancements
+## Implemented Enhancements
+
+- [x] Async OpenAI client for better performance
+- [x] Conversation history per channel
+- [x] Tool detection with auto-setup instructions
+- [x] Slash commands (`/ask`, `/feedback`)
+- [x] Feedback tracking via reactions
+- [x] Rich embeds for model responses
+- [x] LRU cache framework for frequent queries
+
+## Future Work
 
 - [ ] Analytics bot for weekly community summaries
-- [ ] Feedback collection with user consent
-- [ ] Slash command support alongside mentions
 - [ ] Multi-channel deployment with role-based access
+- [ ] More sophisticated caching
+- [ ] Multi-model routing (XS vs S vs M)

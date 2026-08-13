@@ -45,7 +45,136 @@ CHANNEL_CONTEXT = {
     1537076245278359582: "Staff testing and internal discussions",
 }
 
-# Tool detection keywords
+# Tool definitions for agent loop
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_model_info",
+            "description": "Get detailed info about a Poolside model by name",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_name": {
+                        "type": "string",
+                        "description": "Model name (e.g., 'laguna-s', 'laguna-xs', 'laguna-m')"
+                    }
+                },
+                "required": ["model_name"]
+            }
+        }
+    },
+    {
+        "type": "function", 
+        "function": {
+            "name": "search_docs",
+            "description": "Get documentation links for Poolside topics",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic to search (e.g., 'pool', 'api', 'cli', 'huggingface')"
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "post_reply",
+            "description": "Post a reply to the Discord channel",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The reply text to post"
+                    }
+                },
+                "required": ["text"]
+            }
+        }
+    }
+]
+
+# Tool implementations
+def get_model_info(model_name):
+    """Return model specs"""
+    models = {
+        "s": {"name": "Laguna S 2.1", "params": "118B total (8B active)", "context": "1M", "use": "Long-horizon agentic coding"},
+        "xs": {"name": "Laguna XS 2.1", "params": "33B total (3B active)", "context": "256K", "use": "Fast agentic coding, Mac-compatible"},
+        "m": {"name": "Laguna M.1", "params": "225B total (23B active)", "context": "256K", "use": "Complex multi-step coding tasks"},
+    }
+    key = model_name.lower().replace("laguna-", "").replace("laguna", "")
+    return models.get(key, {"error": "Model not found"})
+
+def search_docs(topic):
+    """Return relevant docs links"""
+    topic = topic.lower()
+    if "pool" in topic:
+        return {"links": ["https://docs.poolside.ai/cli/pool", "https://docs.poolside.ai/cli/pool-exec"]}
+    elif "api" in topic:
+        return {"links": ["https://docs.poolside.ai/api/overview", "https://docs.poolside.ai/api/openai-api-examples"]}
+    elif "huggingface" in topic or "hf" in topic:
+        return {"links": ["https://huggingface.co/poolside/Laguna-S-2.1", "https://huggingface.co/poolside/Laguna-XS-2.1"]}
+    return {"links": ["https://docs.poolside.ai"]}
+
+async def run_agent_loop(messages, channel, max_steps=4):
+    """Agent loop with tool calling (Slack-style pattern)"""
+    posted = False
+    
+    for step in range(max_steps):
+        try:
+            response = await client.chat.completions.create(
+                model="poolside/laguna-s-2.1",
+                messages=messages,
+                tools=TOOLS,
+            )
+            msg = response.choices[0].message
+            messages.append(msg.model_dump(exclude_none=True))
+            
+            if not msg.tool_calls:
+                # Final response without tool calls
+                if not posted and msg.content:
+                    posted = True
+                    return msg.content
+                return msg.content
+            
+            # Execute tool calls
+            for tool_call in msg.tool_calls:
+                func_name = tool_call.function.name
+                try:
+                    args = json.loads(tool_call.function.arguments or "{}")
+                    if func_name == "get_model_info":
+                        result = get_model_info(args.get("model_name", ""))
+                    elif func_name == "search_docs":
+                        result = search_docs(args.get("topic", ""))
+                    elif func_name == "post_reply":
+                        # For Discord, we handle posting directly
+                        result = {"status": "queued"}
+                        if not posted:
+                            posted = True
+                            # Will be handled by caller
+                            messages.append({"role": "assistant_text", "content": args.get("text", "")})
+                    else:
+                        result = {"error": "Unknown tool"}
+                except Exception as e:
+                    result = {"error": str(e)}
+                
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    if not posted:
+        return "I ran out of steps. Please rephrase your question."
+    return messages[-1].get("content", "Done")
 TOOL_KEYWORDS = {
     "kilo code": "Kilo Code: Settings → Providers → Custom provider → Base URL: `https://inference.poolside.ai/v1`",
     "cline": "Cline: Use OpenAI-compatible endpoint at `https://inference.poolside.ai/v1`",
@@ -62,7 +191,9 @@ DOCS_LINKS = {
     "huggingface": "https://huggingface.co/poolside",
 }
 
-SYSTEM_BASE = """You are Poolie, the Poolside community bot. Be brief and factual.
+SYSTEM_BASE = """You are Poolie, the Poolside community bot. Be helpful and accurate.
+
+When users ask for SVG images, code, or technical content, generate them when possible. Include the SVG code directly in your response.
 
 ## Poolside Models
 
@@ -194,28 +325,22 @@ async def on_message(message):
 
     async with message.channel.typing():
         try:
-            # Check for tool-specific help
-            tool_info = detect_tool(prompt)
-            
-            # Build messages with history
+            # Build messages with agent loop pattern
             messages = [{"role": "system", "content": build_system_prompt(message.channel.id)}]
             
             # Add recent history
-            for msg in message_history[message.channel.id][-5:]:
+            for msg in message_history[message.channel.id][-3:]:
                 messages.append(msg)
             
-            if tool_info:
-                prompt = f"{prompt}\n\n{tool_info}"
-                messages[-1] = {"role": "user", "content": prompt}
-
-            completion = await client.chat.completions.create(
-                model="poolside/laguna-s-2.1",
-                messages=messages,
-            )
-            reply = completion.choices[0].message.content
+            messages.append({"role": "user", "content": prompt})
+            
+            # Run agent loop
+            reply = await run_agent_loop(messages, message.channel)
             
             # Update history with bot response
+            message_history[message.channel.id].append({"role": "user", "content": prompt})
             message_history[message.channel.id].append({"role": "assistant", "content": reply})
+            message_history[message.channel.id] = message_history[message.channel.id][-HISTORY_MAX:]
             
         except Exception as e:
             reply = "Having trouble right now, try again in a moment."

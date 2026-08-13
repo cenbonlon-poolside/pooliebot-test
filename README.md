@@ -2,29 +2,6 @@
 
 A Poolside community bot that answers questions about Poolside models, the pool CLI, and agentic coding.
 
-## Setup
-
-1. **Create the Discord bot** at discord.com/developers/applications
-   - Enable Message Content Intent under Privileged Gateway Intents
-   - Copy the bot token
-
-2. **Get your Poolside API key** from platform.poolside.ai
-
-3. **Configure credentials**
-   ```bash
-   # Edit .env and add your tokens:
-   DISCORD_TOKEN=<paste_discord_bot_token_here>
-   POOLSIDE_API_KEY=<paste_poolside_api_key_here>
-   ```
-
-4. **Add channel restrictons**
-   - Edit `ALLOWED_CHANNELS` in `bot.py` to include your Discord channel IDs
-
-5. **Run**
-   ```bash
-   python bot.py
-   ```
-
 ## Features
 
 - Responds when mentioned

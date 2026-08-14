@@ -1,15 +1,18 @@
 # Poolie Discord Bot
 
-A Poolside community bot that answers questions about Poolside models, the pool CLI, and agentic coding.
+A Poolside community bot that answers questions about Poolside models, the pool CLI, and agentic coding. Powered by `poolside/laguna-s-2.1`.
 
 ## Features
 
-- Responds when mentioned
-- Per-user 10-second cooldown
-- Channel allowlist for controlled deployment
-- Automatic message chunking (Discord's 2000 char limit)
-- Basic error handling
-- SVG to PNG image conversion (auto-detects and renders SVG code)
+- **Mention responses** - Bot replies when `@Poolie` is mentioned
+- **Slash commands** - `/ask <question>` and `/feedback` endpoints
+- **Per-user 10-second cooldown** - Rate limiting prevents spam
+- **Channel allowlist** - Controlled deployment (staff channel only)
+- **Conversation history** - Rolling buffer maintains context (10 messages)
+- **Agent loop with tool calling** - Model can call tools for model info, docs, replies
+- **Automatic SVG to PNG conversion** - Renders SVG code as images
+- **Rich embeds** - Formatted responses for model-related questions
+- **Feedback tracking** - Logs 👍/👎 reactions for training data
 
 ## Deployment
 
@@ -38,9 +41,21 @@ See `lambda/` directory and `terraform/` for infrastructure-as-code deployment.
 
 ```
 poolie/
-├── bot.py              # Main Discord bot
-├── explanation.md      # Detailed documentation
+├── bot.py              # Main Discord bot with agent loop
+├── explanation.md      # Detailed documentation  
 ├── ARCHITECTURE.md     # Architecture overview
+├── README.md           # This file
 ├── requirements.txt    # Python dependencies
-├── lambda/             # Lambda deployment alternative
+├── lambda/             # Serverless alternative (slash commands only)
+│   └── app.py
 └── terraform/          # Infrastructure as code
+    └── modules/aws/
+        └── main.tf
+```
+
+## Test Commands
+
+- `@Poolie what is laguna-s-2.1?`
+- `@Poolie tell me about Kilo Code integration`
+- `/ask how do I use pool CLI?`
+- `/feedback` (with rating)

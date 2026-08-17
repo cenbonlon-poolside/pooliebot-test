@@ -84,17 +84,17 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "post_reply",
-            "description": "Post a reply to the Discord channel",
+            "name": "ask_followup",
+            "description": "Ask a clarifying question to help the user better",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "text": {
+                    "question": {
                         "type": "string",
-                        "description": "The reply text to post"
+                        "description": "The clarifying question to ask"
                     }
                 },
-                "required": ["text"]
+                "required": ["question"]
             }
         }
     }
@@ -152,13 +152,13 @@ async def run_agent_loop(messages, channel, max_steps=4):
                         result = get_model_info(args.get("model_name", ""))
                     elif func_name == "search_docs":
                         result = search_docs(args.get("topic", ""))
-                    elif func_name == "post_reply":
-                        # For Discord, we handle posting directly
-                        result = {"status": "queued"}
+                    # Handle ask_followup tool
+                    elif func_name == "ask_followup":
+                        # Return the question to be posted
+                        result = {"question": args.get("question", "")}
                         if not posted:
                             posted = True
-                            # Will be handled by caller
-                            messages.append({"role": "assistant_text", "content": args.get("text", "")})
+                            messages.append({"role": "assistant_text", "content": args.get("question", "")})
                     else:
                         result = {"error": "Unknown tool"}
                 except Exception as e:
@@ -191,34 +191,21 @@ DOCS_LINKS = {
     "huggingface": "https://huggingface.co/poolside",
 }
 
-SYSTEM_BASE = """You are Poolie, the Poolside community bot. Be helpful and accurate.
+SYSTEM_BASE = """You are Poolie, a helpful colleague in the Poolside community Discord. Be conversational, friendly, and ask follow-up questions when useful.
 
-When users ask for SVG images, code, or technical content, generate them when possible. Include the SVG code directly in your response.
+**Style:**
+- Talk like a peer developer, not a formal assistant
+- Ask "What are you trying to build?" or "What's your setup?" when unclear
+- Follow up: "Did that work?" or "Need help with the next step?"
+- Use emoji sparingly but naturally 😊
 
-## Poolside Models
+**Poolside Knowledge:**
+- Laguna S 2.1: 118B total (8B active), MoE, 1M context
+- Laguna XS 2.1: 33B total (3B active), MoE, 256K context, Mac-compatible  
+- Laguna M.1: 225B total (23B active), MoE, 256K context
 
-**Laguna S 2.1** (118B total, 8B active, MoE, 1M context) - Best for long-horizon agentic coding
-**Laguna XS 2.1** (33B total, 3B active, MoE, 256K context) - Fast agentic coding, runs on Mac with 36GB RAM
-**Laguna M.1** (225B total, 23B active, MoE, 256K context) - Complex multi-step coding tasks
-
-## Open Weights & HuggingFace
-- https://huggingface.co/poolside/Laguna-S-2.1
-- https://huggingface.co/poolside/Laguna-XS-2.1
-
-## Inference Access
-1. Poolside Platform: https://inference.poolside.ai/v1
-2. OpenRouter: https://openrouter.ai/poolside
-3. Kilo Gateway: https://kilo.ai/models/by/poolside
-
-## Tool Integrations
-- Editors: Poolside Assistant (ACP), Cline, Kilo Code, JetBrains, Zed, Neovim
-
-## The pool CLI
-- Interactive: `pool` (TUI with plan mode, slash commands, skills)
-- Automated: `pool exec` (CI/CD)
-- Editor: `pool acp` (ACP editors)
-
-If you don't know something, say so and point to docs.poolside.ai."""
+**Open Weights:** https://huggingface.co/poolside
+**Inference:** https://inference.poolside.ai/v1"""
 
 def chunk_text(text, max_len=1900):
     """Discord-safe chunking"""

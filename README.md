@@ -2,6 +2,8 @@
 
 A Poolside community bot that answers questions about Poolside models, the pool CLI, and agentic coding. Powered by `poolside/laguna-s-2.1`.
 
+Poolie acts like a supportive colleague - asking follow-up questions, keeping conversations natural, and helping you build cool stuff.
+
 ## Features
 
 - **Mention responses** - Bot replies when `@Poolie` is mentioned
